@@ -1,5 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Play, Pause, Heart, Share2, Download, Maximize, Minimize, X } from 'lucide-react';
+import React, { useState, useEffect, use } from 'react';
+import { ChevronLeft, ChevronRight, Play, Pause, Heart, Share2, Download, Maximize, Minimize, X,Home, Wifi, Waves, Car, Star, MapPin, Calendar, Users, MessageCircle } from 'lucide-react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import { useNavigate } from 'react-router-dom';
 
 // Sample data for 6 categories
 const imageCategories = [
@@ -28,7 +31,7 @@ const imageCategories = [
   },
   {
     id: 3,
-    name: 'Nature',
+    name: 'Bedroom',
     color: 'from-green-500 to-emerald-500',
     images: [
       'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=400&h=300&fit=crop',
@@ -38,7 +41,7 @@ const imageCategories = [
   },
   {
     id: 4,
-    name: 'Urban Life',
+    name: 'Living Room',
     color: 'from-orange-500 to-red-500',
     images: [
       'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=400&h=300&fit=crop',
@@ -48,7 +51,7 @@ const imageCategories = [
   },
   {
     id: 5,
-    name: 'Abstract',
+    name: 'Kitchen & Dining',
     color: 'from-indigo-500 to-purple-500',
     images: [
       'https://images.unsplash.com/photo-1557672172-298e090bd0f1?w=400&h=300&fit=crop',
@@ -58,7 +61,7 @@ const imageCategories = [
   },
   {
     id: 6,
-    name: 'Minimalist',
+    name: 'Comfort Room ',
     color: 'from-gray-500 to-slate-600',
     images: [
       'https://images.unsplash.com/photo-1493723843671-1d655e66ac1c?w=400&h=300&fit=crop',
@@ -461,297 +464,8 @@ const ImageCollectionCarousel = () => {
           </div>
         </div>
 
-        {/* Description Section */}
-        <div className="bg-white rounded-xl shadow-lg p-8 space-y-6">
-          <div className="text-center">
-            <h2 className="text-3xl font-bold text-gray-800 mb-4">Premium Image Collections</h2>
-            <p className="text-lg text-gray-600 max-w-4xl mx-auto leading-relaxed">
-              Discover stunning, high-quality images across diverse categories. Our curated collection features breathtaking landscapes, 
-              modern architecture, urban photography, and abstract art. Each image is professionally selected and optimized for both 
-              personal and commercial use. Perfect for designers, marketers, bloggers, and creative professionals seeking exceptional visual content.
-            </p>
-          </div>
 
-          <div className="grid md:grid-cols-3 gap-6 mt-8">
-            <div className="text-center p-4">
-              <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-semibold text-gray-800 mb-2">High Quality</h3>
-              <p className="text-gray-600">Professional grade images with exceptional resolution and clarity</p>
-            </div>
-            <div className="text-center p-4">
-              <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-teal-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-semibold text-gray-800 mb-2">Licensed</h3>
-              <p className="text-gray-600">Full commercial rights included with every download</p>
-            </div>
-            <div className="text-center p-4">
-              <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-semibold text-gray-800 mb-2">Curated</h3>
-              <p className="text-gray-600">Hand-picked by professional photographers and designers</p>
-            </div>
-          </div>
-        </div>
 
-        {/* Payment Plans - Airbnb Style */}
-        <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-          <div className="flex flex-col lg:flex-row">
-            {/* Payment Description (Left Side) */}
-            <div className="lg:w-2/3 p-8">
-              <h2 className="text-3xl font-bold text-gray-800 mb-6">Secure Payment</h2>
-              
-              <div className="space-y-8">
-                <div>
-                  <h3 className="text-xl font-semibold text-gray-800 mb-3">Flexible Plans</h3>
-                  <p className="text-gray-600 leading-relaxed">
-                    Choose from our range of subscription plans that fit your needs.
-                    All plans come with a 30-day money-back guarantee and full commercial rights.
-                  </p>
-                </div>
-                
-                <div>
-                  <h3 className="text-xl font-semibold text-gray-800 mb-3">Trusted Payment Methods</h3>
-                  <div className="flex flex-wrap gap-4 mt-4">
-                    <div className="w-16 h-10 bg-gray-100 rounded-md flex items-center justify-center">
-                      <span className="text-xs font-semibold text-gray-700">VISA</span>
-                    </div>
-                    <div className="w-16 h-10 bg-gray-100 rounded-md flex items-center justify-center">
-                      <span className="text-xs font-semibold text-gray-700">MC</span>
-                    </div>
-                    <div className="w-16 h-10 bg-gray-100 rounded-md flex items-center justify-center">
-                      <span className="text-xs font-semibold text-gray-700">AMEX</span>
-                    </div>
-                    <div className="w-16 h-10 bg-gray-100 rounded-md flex items-center justify-center">
-                      <span className="text-xs font-semibold text-gray-700">PP</span>
-                    </div>
-                  </div>
-                </div>
-                
-                <div>
-                  <h3 className="text-xl font-semibold text-gray-800 mb-3">Security Guarantee</h3>
-                  <p className="text-gray-600 leading-relaxed">
-                    All transactions are encrypted and secure. We never store your payment details
-                    on our servers. Your privacy and security are our top priorities.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Payment Options (Right Side) */}
-            <div className="lg:w-1/3 bg-gray-50 p-8 border-l border-gray-200">
-              <h3 className="text-2xl font-bold text-gray-800 mb-6">Choose Your Plan</h3>
-              
-              <div className="space-y-4">
-                {/* Basic Plan */}
-                <div className="border border-gray-200 rounded-lg p-4 hover:border-blue-400 transition-colors">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h4 className="font-semibold text-gray-800">Basic</h4>
-                      <p className="text-sm text-gray-500">10 downloads/month</p>
-                    </div>
-                    <span className="font-bold text-gray-800">$9/mo</span>
-                  </div>
-                </div>
-                
-                {/* Pro Plan */}
-                <div className="border-2 border-blue-500 rounded-lg p-4 bg-blue-50">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h4 className="font-semibold text-gray-800">Pro</h4>
-                        <span className="text-xs bg-blue-500 text-white px-2 py-1 rounded-full">Popular</span>
-                      </div>
-                      <p className="text-sm text-gray-500">50 downloads/month</p>
-                    </div>
-                    <span className="font-bold text-gray-800">$19/mo</span>
-                  </div>
-                </div>
-                
-                {/* Enterprise Plan */}
-                <div className="border border-gray-200 rounded-lg p-4 hover:border-blue-400 transition-colors">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h4 className="font-semibold text-gray-800">Enterprise</h4>
-                      <p className="text-sm text-gray-500">Unlimited downloads</p>
-                    </div>
-                    <span className="font-bold text-gray-800">$49/mo</span>
-                  </div>
-                </div>
-              </div>
-              
-              <button className="w-full mt-6 bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 rounded-lg font-semibold hover:shadow-lg transition-all duration-300">
-                Continue to Payment
-              </button>
-              
-              <div className="mt-4 text-center text-sm text-gray-500">
-                <p>30-day money-back guarantee</p>
-                <p className="mt-1">Cancel anytime</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* User Feedback Section */}
-        <div className="bg-white rounded-xl shadow-lg p-8">
-          <div className="text-center mb-8">
-            <h2 className="text-3xl font-bold text-gray-800 mb-4">What Our Users Say</h2>
-            <div className="flex items-center justify-center gap-1 mb-4">
-              {[...Array(5)].map((_, i) => (
-                <svg key={i} className="w-6 h-6 text-yellow-400" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                </svg>
-              ))}
-              <span className="text-lg font-semibold text-gray-700 ml-2">4.9/5 from 2,847 reviews</span>
-            </div>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-6">
-            {/* Review 1 */}
-            <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl p-6 border border-blue-100">
-              <div className="flex items-center gap-1 mb-4">
-                {[...Array(5)].map((_, i) => (
-                  <svg key={i} className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                  </svg>
-                ))}
-              </div>
-              <p className="text-gray-700 mb-4 italic">
-                "Absolutely stunning collection! The quality is outstanding and the variety is incredible. 
-                I've found the perfect images for all my design projects. The Pro plan is worth every penny!"
-              </p>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                  <span className="text-white font-semibold">SJ</span>
-                </div>
-                <div>
-                  <h4 className="font-semibold text-gray-800">Sarah Johnson</h4>
-                  <p className="text-sm text-gray-600">Graphic Designer</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Review 2 */}
-            <div className="bg-gradient-to-br from-green-50 to-teal-50 rounded-xl p-6 border border-green-100">
-              <div className="flex items-center gap-1 mb-4">
-                {[...Array(5)].map((_, i) => (
-                  <svg key={i} className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                  </svg>
-                ))}
-              </div>
-              <p className="text-gray-700 mb-4 italic">
-                "The carousel interface is so intuitive and beautiful. I love how easy it is to browse through 
-                categories and find exactly what I need. The fullscreen feature is a game-changer!"
-              </p>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-teal-600 rounded-full flex items-center justify-center">
-                  <span className="text-white font-semibold">MC</span>
-                </div>
-                <div>
-                  <h4 className="font-semibold text-gray-800">Michael Chen</h4>
-                  <p className="text-sm text-gray-600">Marketing Manager</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Review 3 */}
-            <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl p-6 border border-orange-100">
-              <div className="flex items-center gap-1 mb-4">
-                {[...Array(5)].map((_, i) => (
-                  <svg key={i} className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                  </svg>
-                ))}
-              </div>
-              <p className="text-gray-700 mb-4 italic">
-                "As a blogger, I need high-quality images regularly. This platform has become my go-to source. 
-                The licensing is clear, and the download process is seamless. Highly recommended!"
-              </p>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-red-600 rounded-full flex items-center justify-center">
-                  <span className="text-white font-semibold">ER</span>
-                </div>
-                <div>
-                  <h4 className="font-semibold text-gray-800">Emily Rodriguez</h4>
-                  <p className="text-sm text-gray-600">Content Creator</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Additional Reviews Row */}
-          <div className="grid md:grid-cols-2 gap-6 mt-6">
-            {/* Review 4 */}
-            <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-6 border border-purple-100">
-              <div className="flex items-center gap-1 mb-4">
-                {[...Array(5)].map((_, i) => (
-                  <svg key={i} className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                  </svg>
-                ))}
-              </div>
-              <p className="text-gray-700 mb-4 italic">
-                "The Enterprise plan has transformed our workflow. Unlimited downloads and team collaboration 
-                features are exactly what we needed. Customer support is fantastic too!"
-              </p>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-600 rounded-full flex items-center justify-center">
-                  <span className="text-white font-semibold">DL</span>
-                </div>
-                <div>
-                  <h4 className="font-semibold text-gray-800">David Kim</h4>
-                  <p className="text-sm text-gray-600">Creative Director</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Review 5 */}
-            <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-xl p-6 border border-indigo-100">
-              <div className="flex items-center gap-1 mb-4">
-                {[...Array(4)].map((_, i) => (
-                  <svg key={i} className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                  </svg>
-                ))}
-                <svg className="w-4 h-4 text-gray-300" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                </svg>
-              </div>
-              <p className="text-gray-700 mb-4 italic">
-                "Great service overall! The image quality is superb and the variety keeps growing. 
-                Would love to see more abstract art categories, but definitely satisfied with my subscription."
-              </p>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-full flex items-center justify-center">
-                  <span className="text-white font-semibold">AT</span>
-                </div>
-                <div>
-                  <h4 className="font-semibold text-gray-800">Alex Thompson</h4>
-                  <p className="text-sm text-gray-600">Web Developer</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Call to Action */}
-          <div className="text-center mt-8 pt-8 border-t border-gray-200">
-            <h3 className="text-xl font-bold text-gray-800 mb-2">Join thousands of satisfied users</h3>
-            <p className="text-gray-600 mb-4">Start your free trial today and discover the perfect images for your projects</p>
-            <button className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-8 py-3 rounded-lg font-semibold hover:shadow-lg transition-all duration-300 transform hover:scale-105">
-              Start Free Trial
-            </button>
-          </div>
-        </div>
 
         {/* Custom CSS for animations */}
         <style jsx>{`
@@ -778,10 +492,536 @@ const ImageCollectionCarousel = () => {
   );
 };
 
+const Feedback = () => {
+const [loading, setLoading] = useState(true);
+useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 1000);
+    return () => clearTimeout(timer);
+  }, []);
+  if (loading) {
+return (
+    <div className="w-full max-w-7xl mx-auto p-4 ">
+      <div className="flex h-96 gap-4 animate-pulse">
+        <div className="flex-1 bg-gray-300 rounded-xl"></div>
+        <div className="w-80 flex flex-col gap-2">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="flex-1 bg-gray-300 rounded-xl"></div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+  }
+  return (
+    <>
+      {/* User Feedback Section */}
+      <div className="bg-white rounded-xl shadow-lg p-8 mt-12">
+        <div className="text-center mb-8">
+          <h2 className="text-3xl font-bold text-gray-800 mb-4">What Our Users Say</h2>
+          <div className="flex items-center justify-center gap-1 mb-4">
+            {[...Array(5)].map((_, i) => (
+              <svg key={i} className="w-6 h-6 text-yellow-400" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+              </svg>
+            ))}
+            <span className="text-lg font-semibold text-gray-700 ml-2">4.9/5 from 2,847 reviews</span>
+          </div>
+        </div>
+
+        <div className="grid md:grid-cols-3 gap-6">
+          {/* Review 1 */}
+          <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl p-6 border border-blue-100">
+            <div className="flex items-center gap-1 mb-4">
+              {[...Array(5)].map((_, i) => (
+                <svg key={i} className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                </svg>
+              ))}
+            </div>
+            <p className="text-gray-700 mb-4 italic">
+              "Absolutely stunning collection! The quality is outstanding and the variety is incredible. 
+              I've found the perfect images for all my design projects. The Pro plan is worth every penny!"
+            </p>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                <span className="text-white font-semibold">SJ</span>
+              </div>
+              <div>
+                <h4 className="font-semibold text-gray-800">Sarah Johnson</h4>
+                <p className="text-sm text-gray-600">Graphic Designer</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Review 2 */}
+          <div className="bg-gradient-to-br from-green-50 to-teal-50 rounded-xl p-6 border border-green-100">
+            <div className="flex items-center gap-1 mb-4">
+              {[...Array(5)].map((_, i) => (
+                <svg key={i} className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                </svg>
+              ))}
+            </div>
+            <p className="text-gray-700 mb-4 italic">
+              "The carousel interface is so intuitive and beautiful. I love how easy it is to browse through 
+              categories and find exactly what I need. The fullscreen feature is a game-changer!"
+            </p>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-teal-600 rounded-full flex items-center justify-center">
+                <span className="text-white font-semibold">MC</span>
+              </div>
+              <div>
+                <h4 className="font-semibold text-gray-800">Michael Chen</h4>
+                <p className="text-sm text-gray-600">Marketing Manager</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Review 3 */}
+          <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl p-6 border border-orange-100">
+            <div className="flex items-center gap-1 mb-4">
+              {[...Array(5)].map((_, i) => (
+                <svg key={i} className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                </svg>
+              ))}
+            </div>
+            <p className="text-gray-700 mb-4 italic">
+              "As a blogger, I need high-quality images regularly. This platform has become my go-to source. 
+              The licensing is clear, and the download process is seamless. Highly recommended!"
+            </p>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-red-600 rounded-full flex items-center justify-center">
+                <span className="text-white font-semibold">ER</span>
+              </div>
+              <div>
+                <h4 className="font-semibold text-gray-800">Emily Rodriguez</h4>
+                <p className="text-sm text-gray-600">Content Creator</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Additional Reviews Row */}
+        <div className="grid md:grid-cols-2 gap-6 mt-6">
+          {/* Review 4 */}
+          <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-6 border border-purple-100">
+            <div className="flex items-center gap-1 mb-4">
+              {[...Array(5)].map((_, i) => (
+                <svg key={i} className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                </svg>
+              ))}
+            </div>
+            <p className="text-gray-700 mb-4 italic">
+              "The Enterprise plan has transformed our workflow. Unlimited downloads and team collaboration 
+              features are exactly what we needed. Customer support is fantastic too!"
+            </p>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-600 rounded-full flex items-center justify-center">
+                <span className="text-white font-semibold">DL</span>
+              </div>
+              <div>
+                <h4 className="font-semibold text-gray-800">David Kim</h4>
+                <p className="text-sm text-gray-600">Creative Director</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Review 5 */}
+          <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-xl p-6 border border-indigo-100">
+            <div className="flex items-center gap-1 mb-4">
+              {[...Array(4)].map((_, i) => (
+                <svg key={i} className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                </svg>
+              ))}
+              <svg className="w-4 h-4 text-gray-300" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+              </svg>
+            </div>
+            <p className="text-gray-700 mb-4 italic">
+              "Great service overall! The image quality is superb and the variety keeps growing. 
+              Would love to see more abstract art categories, but definitely satisfied with my subscription."
+            </p>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-full flex items-center justify-center">
+                <span className="text-white font-semibold">AT</span>
+              </div>
+              <div>
+                <h4 className="font-semibold text-gray-800">Alex Thompson</h4>
+                <p className="text-sm text-gray-600">Web Developer</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+const Map = () => {
+  const [loading, setLoading] = useState(true);
+  const [map, setMap] = useState(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 1000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!loading && !map) {
+      // Initialize the map with your specified coordinates
+      const leafletMap = L.map('map-container').setView([14.9669976, 120.9332742], 13);
+      
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+      }).addTo(leafletMap);
+      
+      // Add marker at the specified coordinates
+      L.marker([14.9669976, 120.9332742]).addTo(leafletMap)
+        .bindPopup('Marker Location')
+        .openPopup();
+      
+      setMap(leafletMap);
+    }
+
+    return () => {
+      if (map) {
+        map.remove();
+      }
+    };
+  }, [loading, map]);
+
+  if (loading) {
+    return (
+      <div className="w-full max-w-7xl mx-auto p-4">
+        <div className="h-96 bg-gray-300 rounded-xl animate-pulse"></div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+<div className="w-full max-w-7xl mx-auto p-4">
+  <div className="border border-gray-200 rounded-xl shadow-md overflow-hidden">
+    {/* Header with icon and title */}
+    <div className="flex gap-3 items-center justify-center bg-gray-50 p-4 border-b border-gray-200">
+      <MapPin className="w-6 h-6 text-red-500" />
+      <h2 className="text-2xl font-bold text-gray-800">Location Map</h2>
+    </div>
+    
+    {/* Map container */}
+ <div id="map-container" className="h-96 rounded-xl"></div>    
+    {/* Optional footer */}
+    <div className="bg-gray-50 p-3 text-sm text-gray-500 text-center border-t border-gray-200">
+      Interactive map showing our location
+    </div>
+  </div>
+</div>    </>
+  );
+};
+
+const Description = () => {
+  const [isLiked, setIsLiked] = useState(false);
+  const [selectedGuests, setSelectedGuests] = useState(1);
+  const [checkIn, setCheckIn] = useState('');
+  const [checkOut, setCheckOut] = useState('');
+  const [showAllAmenities, setShowAllAmenities] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+const [paymentTotal, setPaymentTotal] = useState('');
+  const calculateTotal ={
+    basePrice:5500,
+    spendPoints:0,
+  };
+
+
+const handleRental = () => {
+  const RentalId = Math.floor(Math.random() * 1000000);  
+  
+  console.log(`Rental ID: ${RentalId}`);
+          navigate(`/upahan/rent/${RentalId}`);
+}
+useEffect(() => {
+          const timer = setTimeout(() => setLoading(false), 1000);
+          return () => clearTimeout(timer);
+      }, []);
+  const amenities = [
+    { icon: Home, label: "Air Conditioning", featured: true },
+    { icon: Wifi, label: "Free WiFi", featured: true },
+    { icon: Waves, label: "Swimming Pool", featured: true },
+    { icon: Car, label: "Parking Space", featured: true },
+    { icon: Home, label: "Kitchen", featured: false },
+    { icon: Home, label: "Laundry", featured: false },
+    { icon: Home, label: "TV", featured: false },
+    { icon: Home, label: "Balcony", featured: false },
+  ];
+  const featuredAmenities = amenities.filter(a => a.featured);
+  const displayAmenities = showAllAmenities ? amenities : featuredAmenities;
+  
+
+if (loading) {
+    return (
+      <div className="w-full max-w-7xl mx-auto p-4">
+        <div className="animate-pulse space-y-4">
+          <div className="h-8 bg-gray-300 rounded w-1/3"></div>
+          <div className="h-6 bg-gray-300 rounded w-1/4"></div>
+          <div className="h-64 bg-gray-300 rounded"></div>
+          <div className="h-8 bg-gray-300 rounded w-1/2"></div>
+          <div className="h-6 bg-gray-300 rounded w-1/3"></div>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="max-w-7xl mx-auto px-4 md:px-8 lg:px-12 mt-8">
+      {/* Header Section with Actions */}
+      <div className="mb-8">
+        <div className="flex justify-between items-start mb-4">
+          <div>
+            <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
+              Modern Apartment in Bulacan
+            </h1>
+            <div className="flex items-center gap-4 text-gray-600">
+              <div className="flex items-center gap-1">
+                <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                <span className="font-medium">5.0</span>
+                <span className="underline hover:no-underline cursor-pointer">1 review</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <MapPin className="w-4 h-4" />
+                <span className="underline hover:no-underline cursor-pointer">Bulacan, Philippines</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button className="flex items-center gap-2 px-4 py-2 rounded-full hover:bg-gray-100 transition-colors">
+              <Share2 className="w-4 h-4" />
+              <span className="hidden md:inline">Share</span>
+            </button>
+            <button 
+              onClick={() => setIsLiked(!isLiked)}
+              className="flex items-center gap-2 px-4 py-2 rounded-full hover:bg-gray-100 transition-colors"
+            >
+              <Heart className={`w-4 h-4 ${isLiked ? 'fill-red-500 text-red-500' : ''}`} />
+              <span className="hidden md:inline">Save</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Left Column - Property Details */}
+        <div className="lg:col-span-2">
+          {/* Property Stats */}
+          <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-2xl p-6 mb-8">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-blue-600">3</div>
+                <div className="text-sm text-gray-600">Bedrooms</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-purple-600">2</div>
+                <div className="text-sm text-gray-600">Bathrooms</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-green-600">1</div>
+                <div className="text-sm text-gray-600">Kitchen</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-orange-600">6</div>
+                <div className="text-sm text-gray-600">Max Guests</div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Host Section */}
+          <div className="flex items-center gap-4 p-6 border border-gray-200 rounded-2xl mb-8 hover:shadow-lg transition-shadow">
+            <div className="relative">
+              <img 
+                className="w-16 h-16 rounded-full object-cover ring-2 ring-blue-100" 
+                src="https://randomuser.me/api/portraits/men/32.jpg" 
+                alt="Host profile" 
+              />
+              <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 rounded-full border-2 border-white flex items-center justify-center">
+                <div className="w-2 h-2 bg-white rounded-full"></div>
+              </div>
+            </div>
+            <div className="flex-1">
+              <h3 className="text-xl font-bold text-gray-900">Hosted by Ariel</h3>
+              <p className="text-gray-600">Web Developer • Superhost</p>
+              <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
+                <span>⭐ 5.0 rating</span>
+                <span>• 3 years hosting</span>
+              </div>
+            </div>
+            <button className="px-6 py-2 border border-gray-300 rounded-full hover:bg-gray-50 transition-colors font-medium">
+              Contact Host
+            </button>
+          </div>
+          
+          {/* Property Description */}
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold mb-6 text-gray-900">About this space</h2>
+            <div className="prose prose-gray max-w-none">
+              <p className="text-gray-700 leading-relaxed mb-4">
+                Experience the perfect blend of comfort and convenience in this beautifully designed modern apartment. 
+                Located in the heart of Bulacan, this spacious 3-bedroom property offers everything you need for an 
+                unforgettable stay.
+              </p>
+              <p className="text-gray-700 leading-relaxed">
+                Whether you're traveling with family or friends, you'll love the thoughtfully designed spaces, 
+                premium amenities, and peaceful neighborhood setting. Just minutes away from local attractions 
+                and dining options, this is your perfect home base for exploring the Philippines.
+              </p>
+            </div>
+          </div>
+          
+          {/* Amenities */}
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold mb-6 text-gray-900">What this place offers</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {displayAmenities.map((amenity, index) => (
+                <div key={index} className="flex items-center gap-4 p-4 rounded-xl hover:bg-gray-50 transition-colors">
+                  <amenity.icon className="w-6 h-6 text-blue-600" />
+                  <span className="font-medium text-gray-800">{amenity.label}</span>
+                </div>
+              ))}
+            </div>
+            {amenities.length > featuredAmenities.length && (
+              <button 
+                onClick={() => setShowAllAmenities(!showAllAmenities)}
+                className="mt-4 px-6 py-3 border border-gray-300 rounded-xl font-medium hover:bg-gray-50 transition-colors"
+              >
+                {showAllAmenities ? 'Show less' : `Show all ${amenities.length} amenities`}
+              </button>
+            )}
+          </div>
+        </div>
+        
+        {/* Right Column - Booking Card */}
+        <div className="lg:col-span-1">
+          <div className="sticky top-6">
+            <div className="border border-gray-200 rounded-3xl shadow-xl p-6 bg-white backdrop-blur-sm">
+              {/* Price Header */}
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <span className="text-3xl font-bold text-gray-900">₱5,500</span>
+                  <span className="text-gray-600 ml-1">/ night</span>
+                </div>
+                <div className="flex items-center gap-1 bg-gray-50 px-3 py-1 rounded-full">
+                  <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                  <span className="font-medium">5.0</span>
+                  <span className="text-gray-500 text-sm">(1)</span>
+                </div>
+              </div>
+              
+              {/* Date Selection */}
+              <div className="grid grid-cols-2 gap-2 mb-4">
+                <div className="relative">
+                  <div className="border border-gray-300 rounded-lg p-4 hover:border-gray-400 transition-colors cursor-pointer">
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">Schedule</label>
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-gray-400" />
+                      <input 
+                        type="date" 
+                        placeholder="Add date" 
+                        value={checkIn}
+                        onChange={(e) => setCheckIn(e.target.value)}
+                        className="w-full focus:outline-none bg-transparent" 
+                      />
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+              
+              {/* Guest Selector */}
+              <div className="border border-gray-300 rounded-lg p-4 mb-6 hover:border-gray-400 transition-colors">
+                <label className="block text-xs font-semibold text-gray-500 mb-2">TOTAL PERSON LIVE</label>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Users className="w-4 h-4 text-gray-400" />
+                    <span>{selectedGuests} {selectedGuests === 1 ? 'guest' : 'guests'}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={() => setSelectedGuests(Math.max(1, selectedGuests - 1))}
+                      className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center hover:border-gray-400 disabled:opacity-50"
+                      disabled={selectedGuests <= 1}
+                    >
+                      -
+                    </button>
+                    <button 
+                      onClick={() => setSelectedGuests(Math.min(6, selectedGuests + 1))}
+                      className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center hover:border-gray-400 disabled:opacity-50"
+                      disabled={selectedGuests >= 6}
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Reserve Button */}
+              <button onClick={() => handleRental()} className="w-full bg-gradient-to-r from-blue-600 via-purple-600 to-blue-600 bg-size-200 bg-pos-0 hover:bg-pos-100 text-white py-4 rounded-xl font-bold text-lg transition-all duration-500 shadow-lg hover:shadow-xl transform hover:-translate-y-1">
+                Rent
+              </button>
+              
+              <p className="text-center text-gray-500 text-sm mt-3">You won't be charged yet</p>
+              
+              {/* Price Breakdown */}
+              <div className="mt-6 pt-6 border-t border-gray-200">
+                <div className="space-y-3">
+      
+                  <div className="flex justify-between">
+                    <span className="text-gray-700 underline hover:no-underline cursor-pointer">Spend Points</span>
+                    <span className="font-medium">{calculateTotal.basePrice * 0.05 / 5}</span>
+                  </div>
+
+                </div>
+                <div className="flex justify-between font-bold text-lg mt-6 pt-4 border-t border-gray-200">
+                  <span>Total</span>
+                  <span>₱{calculateTotal.basePrice.toLocaleString()}</span>
+                </div>
+              </div>
+              
+              {/* Cancellation Policy */}
+              <div className="mt-6 p-4 bg-green-50 rounded-xl">
+                <p className="text-center text-sm text-green-700 font-medium">
+                  <span className="inline-block w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                  Free cancellation before May 15
+                </p>
+              </div>
+            </div>
+            
+            {/* Quick Contact */}
+            <div className="mt-6 border border-gray-200 rounded-2xl p-6 bg-white shadow-lg">
+              <div className="flex items-center gap-3 mb-4">
+                <MessageCircle className="w-5 h-5 text-blue-600" />
+                <h3 className="font-bold text-gray-900">Questions?</h3>
+              </div>
+              <p className="text-gray-600 text-sm mb-4">Get quick answers from Ariel</p>
+              <button className="w-full border border-gray-300 py-3 rounded-xl font-medium hover:bg-gray-50 transition-colors">
+                Message Host
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
 const Room = () => {
   return (
     <div className="bg-gray-100 min-h-screen">
       <ImageCollectionCarousel />
+<Description/>
+<Map/>
+      <Feedback/>
 
 
     </div>
