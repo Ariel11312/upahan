@@ -170,7 +170,7 @@ export const sendOTP = async (req, res) => {
       }),
     });
     const smsData = await smsRes.json();
-
+console.log(otp)
     if (!smsRes.ok) {
       console.error('Semaphore error:', smsData);
       return res.status(500).json({ message: 'Failed to send SMS via Semaphore.' });
@@ -218,6 +218,8 @@ export const verifyOTP = async (req, res) => {
     const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
     const existingUser = existingUsers?.users?.find(u => u.email === email);
 
+    let userId;
+
     if (!existingUser) {
       // First time — create the user
       const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
@@ -232,17 +234,24 @@ export const verifyOTP = async (req, res) => {
         return res.status(500).json({ message: 'Failed to create user.' });
       }
 
+      userId = newUser.user.id;
+
       // Save to users table
       await supabaseAdmin.from('users').upsert({
-        id: newUser.user.id,
+        id: userId,
         phone,
         email,
         role: 'rentee',
       });
+    } else {
+      userId = existingUser.id;
     }
 
-    // Sign in to get session tokens
-    const { data: signInData, error: signInErr } = await supabaseAdmin.auth.signInWithPassword({
+    // Ensure password is always in sync before signing in
+    await supabaseAdmin.auth.admin.updateUserById(userId, { password });
+
+    // Sign in with regular client (not admin) to get session tokens
+    const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
