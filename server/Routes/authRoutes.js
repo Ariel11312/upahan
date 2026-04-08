@@ -1,24 +1,31 @@
-import { Router } from 'express';
-import {
-  createUser,
-  getUserById,
-  loginUser,
-  loginIpLimiter,
-  otpIpLimiter,
-  otpPhoneLimiter,
-  otpVerifyLimiter,
-  sendOTP,
-  signupLimiter,
-  verifyOTP,
-} from '../Auth/userAuth.js';
-import authMiddleware from '../Middleware/authMiddleware.js';
+import { Router } from 'express'
+import rateLimit from 'express-rate-limit'
+import { sendOTP, verifyOTP } from '../Auth/userAuth.js'
 
-const router = Router();
+const router = Router()
 
-router.get('/me',          authMiddleware,                              getUserById);
-router.post('/send-otp',   otpIpLimiter, otpPhoneLimiter,              sendOTP);
-router.post('/verify-otp', otpVerifyLimiter,                           verifyOTP);
-router.post('/signup',     signupLimiter,                              createUser);
-router.post('/login',      loginIpLimiter,                             loginUser);
+const otpIpLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 5,
+  keyGenerator: (req) => req.ip,
+  message: { message: 'Too many OTP requests from your device.' },
+})
 
-export default router;
+const otpPhoneLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 3,
+  keyGenerator: (req) => req.body?.phone ?? req.ip,
+  message: { message: 'Too many OTP requests for this number. Wait 10 minutes.' },
+})
+
+const otpVerifyLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 10,
+  keyGenerator: (req) => req.ip,
+  message: { message: 'Too many verification attempts. Wait 10 minutes.' },
+})
+
+router.post('/send-otp',   otpIpLimiter, otpPhoneLimiter, sendOTP)
+router.post('/verify-otp', otpVerifyLimiter,              verifyOTP)
+
+export default router
