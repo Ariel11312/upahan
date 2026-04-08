@@ -1,13 +1,24 @@
-import { Router } from 'express'
-import { authCallback, googleLogin, saveUser, sendOTP, verifyOTP } from "../Auth/userAuth.js"
+import { Router } from 'express';
+import {
+  createUser,
+  getUserById,
+  loginUser,
+  loginIpLimiter,
+  otpIpLimiter,
+  otpPhoneLimiter,
+  otpVerifyLimiter,
+  sendOTP,
+  signupLimiter,
+  verifyOTP,
+} from '../Auth/userAuth.js';
+import authMiddleware from '../Middleware/authMiddleware.js';
 
-const router = Router()
+const router = Router();
 
-router.get('/google', googleLogin)
-router.get('/callback', authCallback)
-router.post('/save-user', saveUser) 
-router.post('/send-otp', sendOTP) 
-router.post('/verify-otp', verifyOTP) 
+router.get('/me',          authMiddleware,                              getUserById);
+router.post('/send-otp',   otpIpLimiter, otpPhoneLimiter,              sendOTP);
+router.post('/verify-otp', otpVerifyLimiter,                           verifyOTP);
+router.post('/signup',     signupLimiter,                              createUser);
+router.post('/login',      loginIpLimiter,                             loginUser);
 
-
-export default router
+export default router;

@@ -1,39 +1,108 @@
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
+import rateLimit from 'express-rate-limit';
 import supabase from '../Config/supabase.js';
 
 const SUPABASE_URL = 'https://ahebqfxpxiucsxlqwjtd.supabase.co';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const SEMAPHORE_API_KEY = process.env.SEMAPHORE_API_KEY;
-const SEMAPHORE_SENDER = process.env.SEMAPHORE_SENDER_NAME || 'Upahan';
+const SEMAPHORE_API_KEY    = process.env.SEMAPHORE_API_KEY;
+const SEMAPHORE_SENDER     = process.env.SEMAPHORE_SENDER_NAME || 'Upahan';
 
 const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
-const otpStore = new Map();
-const generateOTP = () => String(Math.floor(100000 + Math.random() * 900000));
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 const phoneToEmail = (phone) => `${phone.replace('+63', '')}@upahan.ph`;
+
+/** Cryptographically secure 6-digit OTP (Math.random is NOT secure) */
+const generateOTP = () => {
+  const buf = crypto.randomInt(100000, 999999);
+  return String(buf);
+};
+
+/** Constant-time string comparison to prevent timing attacks on OTP checks */
+const safeCompare = (a, b) => {
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
+};
+
+// ─── Rate Limiters (export so router can apply them) ─────────────────────────
+
+/** 3 OTP sends per phone per 10 min */
+export const otpPhoneLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 3,
+  keyGenerator: (req) => req.body?.phone ?? req.ip,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many OTP requests for this number. Please wait 10 minutes.' },
+});
+
+/** 5 OTP sends per IP per 10 min (stops 1 IP bombing many numbers) */
+export const otpIpLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 5,
+  keyGenerator: (req) => req.ip,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many OTP requests from your device. Please wait 10 minutes.' },
+});
+
+/** 10 verify attempts per IP per 10 min */
+export const otpVerifyLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 10,
+  keyGenerator: (req) => req.ip,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many verification attempts. Please wait 10 minutes.' },
+});
+
+/** 5 signups per IP per hour */
+export const signupLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  keyGenerator: (req) => req.ip,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many sign-up attempts. Please try again in an hour.' },
+});
+
+/** 20 login attempts per IP per 15 min (stacks on top of per-phone lockout) */
+export const loginIpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  keyGenerator: (req) => req.ip,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many login attempts from your device. Please slow down.' },
+});
 
 // ─── GET /api/users/me ────────────────────────────────────────────────────────
 export const getUserById = async (req, res) => {
-  const token = req.cookies.access_token || req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ message: 'No token provided' });
-
-  const { data: { user }, error: tokenError } = await supabase.auth.getUser(token);
-  if (tokenError) return res.status(401).json({ message: 'Invalid token' });
+  // req.user is already attached by authMiddleware — no need to re-verify token here
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ message: 'Unauthorized.' });
 
   const { data, error } = await supabase
     .from('users')
     .select('id, email, first_name, last_name, full_name, phone, role, is_verified, created_at')
-    .eq('email', user.email)
+    .eq('id', userId)
     .single();
 
-  if (error) return res.status(500).json({ error });
-  res.json(data);
+  if (error) {
+    console.error('getUserById error:', error);
+    return res.status(500).json({ message: 'Failed to fetch user.' });
+  }
+
+  return res.json(data);
 };
 
 // ─── POST /api/auth/send-otp ──────────────────────────────────────────────────
+// Apply: otpIpLimiter, otpPhoneLimiter  (in router)
 export const sendOTP = async (req, res) => {
   const { phone } = req.body;
 
@@ -41,17 +110,29 @@ export const sendOTP = async (req, res) => {
     return res.status(400).json({ message: 'Invalid phone number. Use +63XXXXXXXXXX format.' });
   }
 
-  const otp = generateOTP();
-  otpStore.set(phone, { otp, expiresAt: new Date(Date.now() + 5 * 60 * 1000) });
+  const otp       = generateOTP();
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+  const hashedOtp = await bcrypt.hash(otp, 10); // store hash, not plaintext
 
   try {
+    // ── Persist OTP in DB (replaces in-memory Map which dies on restart) ────
+    const { error: upsertError } = await supabase
+      .from('otp_store')
+      .upsert({ phone, otp_hash: hashedOtp, expires_at: expiresAt, attempts: 0 }, { onConflict: 'phone' });
+
+    if (upsertError) {
+      console.error('OTP upsert error:', upsertError);
+      return res.status(500).json({ message: 'Failed to store OTP.' });
+    }
+
+    // ── Send via Semaphore ───────────────────────────────────────────────────
     const smsRes = await fetch('https://api.semaphore.co/api/v4/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        apikey: SEMAPHORE_API_KEY,
-        number: phone,
-        message: `Your Upahan verification code is: ${otp}. Valid for 5 minutes. Do not share this code.`,
+        apikey:     SEMAPHORE_API_KEY,
+        number:     phone,
+        message:    `Your Upahan verification code is: ${otp}. Valid for 5 minutes. Do not share this code.`,
         sendername: SEMAPHORE_SENDER,
       }),
     });
@@ -70,23 +151,90 @@ export const sendOTP = async (req, res) => {
 };
 
 // ─── POST /api/auth/verify-otp ────────────────────────────────────────────────
+// Apply: otpVerifyLimiter  (in router)
+const OTP_MAX_ATTEMPTS = 3;
+const OTP_LOCKOUT_MS   = 5 * 60 * 1000; // 5 minutes
+
 export const verifyOTP = async (req, res) => {
   const { phone, otp } = req.body;
-  if (!phone || !otp) return res.status(400).json({ message: 'Phone and OTP are required.' });
 
-  const stored = otpStore.get(phone);
-  if (!stored) return res.status(400).json({ message: 'No OTP found. Please request a new one.' });
-  if (new Date() > stored.expiresAt) {
-    otpStore.delete(phone);
-    return res.status(400).json({ message: 'OTP expired. Please request a new one.' });
+  if (!phone || !otp) {
+    return res.status(400).json({ message: 'Phone and OTP are required.' });
   }
-  if (stored.otp !== otp) return res.status(400).json({ message: 'Invalid OTP. Please try again.' });
+  if (!/^\d{6}$/.test(otp)) {
+    return res.status(400).json({ message: 'OTP must be a 6-digit number.' });
+  }
 
-  otpStore.delete(phone);
-  return res.json({ message: 'OTP verified.' });
+  try {
+    const { data: stored, error: fetchError } = await supabase
+      .from('otp_store')
+      .select('*')
+      .eq('phone', phone)
+      .single();
+
+    if (fetchError || !stored) {
+      return res.status(400).json({ message: 'No OTP found. Please request a new one.' });
+    }
+
+    // ── Check per-phone OTP lockout ──────────────────────────────────────────
+    if (stored.locked_until && new Date(stored.locked_until) > new Date()) {
+      const secondsLeft = Math.ceil((new Date(stored.locked_until) - Date.now()) / 1000);
+      return res.status(429).json({
+        locked: true,
+        seconds_remaining: secondsLeft,
+        message: 'Too many failed attempts. Please request a new OTP.',
+      });
+    }
+
+    // ── Check expiry ─────────────────────────────────────────────────────────
+    if (new Date() > new Date(stored.expires_at)) {
+      await supabase.from('otp_store').delete().eq('phone', phone);
+      return res.status(400).json({ message: 'OTP expired. Please request a new one.' });
+    }
+
+    // ── Verify hash (bcrypt compare, not plain equality) ─────────────────────
+    const isMatch = await bcrypt.compare(otp, stored.otp_hash);
+
+    if (!isMatch) {
+      const nextAttempts = stored.attempts + 1;
+      const willLock     = nextAttempts >= OTP_MAX_ATTEMPTS;
+      const lockedUntil  = willLock
+        ? new Date(Date.now() + OTP_LOCKOUT_MS).toISOString()
+        : null;
+
+      await supabase
+        .from('otp_store')
+        .update({ attempts: nextAttempts, locked_until: lockedUntil })
+        .eq('phone', phone);
+
+      if (willLock) {
+        return res.status(429).json({
+          locked: true,
+          seconds_remaining: OTP_LOCKOUT_MS / 1000,
+          message: `Too many wrong codes. Please wait ${OTP_LOCKOUT_MS / 60000} minutes or request a new OTP.`,
+        });
+      }
+
+      const attemptsLeft = OTP_MAX_ATTEMPTS - nextAttempts;
+      return res.status(400).json({
+        locked: false,
+        attempts_remaining: attemptsLeft,
+        message: `Invalid OTP. ${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining.`,
+      });
+    }
+
+    // ── OTP correct → delete record immediately (one-time use) ───────────────
+    await supabase.from('otp_store').delete().eq('phone', phone);
+    return res.json({ message: 'OTP verified.' });
+
+  } catch (err) {
+    console.error('verifyOTP error:', err);
+    return res.status(500).json({ message: 'Server error during OTP verification.' });
+  }
 };
 
-// ─── POST /api/auth/signup ────────────────────────────────────────────────────
+// ─── POST /api/users/signup ───────────────────────────────────────────────────
+// Apply: signupLimiter  (in router)
 export const createUser = async (req, res) => {
   const { first_name, last_name, phone, password } = req.body;
 
@@ -94,75 +242,82 @@ export const createUser = async (req, res) => {
     return res.status(400).json({ message: 'All fields are required.' });
   }
 
-  const email = phoneToEmail(phone);
+  const email       = phoneToEmail(phone);
   const hashedPassword = await bcrypt.hash(password, 10);
 
   try {
-    // ✅ Step 1: Check if phone already exists in your users table
-    const { data: existingInTable } = await supabase
+    // ── Check phone already registered ───────────────────────────────────────
+    const { data: existingUser } = await supabase
       .from('users')
       .select('id')
       .eq('phone', phone)
-      .single();
+      .maybeSingle(); // maybeSingle() won't error on 0 rows unlike single()
 
-    if (existingInTable) {
+    if (existingUser) {
       return res.status(409).json({ message: 'This phone number is already registered. Please login.' });
     }
 
-    // ✅ Step 2: Check if the fake email already exists in Supabase Auth
-    // (handles cases where user was created before but not saved to users table)
-    const { data: authList } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
-    const existingAuthUser = authList?.users?.find(u => u.email === email);
+    // ── Check auth user by email (handles partial previous signups) ──────────
+    // FIX: listUsers({ perPage: 1000 }) is dangerous — it loads all users into
+    // memory. Use getUserByEmail (admin) or a direct DB lookup instead.
+    const { data: existingAuth } = await supabaseAdmin
+      .from('auth.users')
+      .select('id')
+      .eq('email', email)
+      .maybeSingle();
 
     let authUserId;
 
-    if (existingAuthUser) {
-      // ✅ Auth user already exists — reuse it instead of creating again
-      // This happens when signup failed halfway (auth created but table insert failed)
-      authUserId = existingAuthUser.id;
-
-      // Update the password in case it changed
+    if (existingAuth?.id) {
+      // Partial previous signup — reuse auth user and update password
+      authUserId = existingAuth.id;
       await supabaseAdmin.auth.admin.updateUserById(authUserId, { password });
     } else {
-      // ✅ Fresh signup — create new auth user
-      const { data: newAuthUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true,
-        user_metadata: {
-          first_name,
-          last_name,
-          full_name: `${first_name} ${last_name}`,
-          phone,
-        },
-      });
+      // Fresh signup
+      const { data: newAuthUser, error: authError } =
+        await supabaseAdmin.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: true,
+          user_metadata: {
+            first_name,
+            last_name,
+            full_name: `${first_name} ${last_name}`,
+            phone,
+          },
+        });
 
       if (authError) {
         console.error('Auth create error:', authError);
-        return res.status(500).json({ message: authError.message });
+        return res.status(500).json({ message: 'Failed to create account.' }); // don't leak authError.message
       }
 
       authUserId = newAuthUser.user.id;
     }
 
-    // ✅ Step 3: Save to public.users table (upsert in case of retry)
-    const { data, error } = await supabase
+    // ── Insert into public.users ─────────────────────────────────────────────
+    // FIX: Do NOT store password in the users table — Supabase Auth owns auth.
+    // Storing a bcrypt hash in public.users alongside Supabase Auth is redundant
+    // and creates two sources of truth. Remove the password column if present.
+    const { data, error: insertError } = await supabase
       .from('users')
       .upsert([{
-        id: authUserId,
+        id:         authUserId,
         first_name,
         last_name,
-        full_name: `${first_name} ${last_name}`,
+        full_name:  `${first_name} ${last_name}`,
         email,
         phone,
-        password: hashedPassword,
-        role: 'rentee',
+        role:        'rentee',
         is_verified: true,
       }], { onConflict: 'id' })
       .select('id, first_name, last_name, phone, role, created_at')
       .single();
 
-    if (error) return res.status(500).json({ error });
+    if (insertError) {
+      console.error('users insert error:', insertError);
+      return res.status(500).json({ message: 'Account created but profile save failed.' });
+    }
 
     return res.status(201).json({ message: 'Account created successfully.', user: data });
   } catch (err) {
@@ -171,21 +326,81 @@ export const createUser = async (req, res) => {
   }
 };
 
+// ─── POST /api/users/login ────────────────────────────────────────────────────
+// Apply: loginIpLimiter  (in router)
+const LOCK_THRESHOLD = 3;
+
+const getAttemptRecord = async (phone) => {
+  const { data } = await supabase
+    .from('login_attempts')
+    .select('*')
+    .eq('phone', phone)
+    .maybeSingle();
+
+  return data ?? { phone, attempts: 0, locked_until: null, lock_duration_minutes: 15 };
+};
+
 export const loginUser = async (req, res) => {
   const { phone, password } = req.body;
-  if (!phone || !password) return res.status(400).json({ message: 'Phone and password are required.' });
+  if (!phone || !password) {
+    return res.status(400).json({ message: 'Phone and password are required.' });
+  }
 
   const email = phoneToEmail(phone);
 
   try {
-    // ✅ supabase (anon key) — not supabaseAdmin
+    // ── 1. Check per-phone lockout ────────────────────────────────────────────
+    const record = await getAttemptRecord(phone);
+
+    if (record.locked_until && new Date(record.locked_until) > new Date()) {
+      const secondsLeft = Math.ceil((new Date(record.locked_until) - Date.now()) / 1000);
+      return res.status(429).json({
+        locked:            true,
+        seconds_remaining: secondsLeft,
+        message:           'Account temporarily locked. Too many failed attempts.',
+      });
+    }
+
+    // ── 2. Attempt sign-in ────────────────────────────────────────────────────
     const { data: signInData, error: signInError } =
       await supabase.auth.signInWithPassword({ email, password });
 
     if (signInError) {
-      console.error('Sign in error:', signInError.message); // check terminal for real error
-      return res.status(401).json({ message: 'Incorrect phone number or password.' });
+      console.error('Sign in error:', signInError.message);
+
+      const attempts     = record.attempts + 1;
+      const duration     = record.lock_duration_minutes;
+      const willLock     = attempts % LOCK_THRESHOLD === 0;
+      const lockedUntil  = willLock
+        ? new Date(Date.now() + duration * 60 * 1000).toISOString()
+        : null;
+      const nextDuration = willLock ? duration * 2 : duration;
+      const remaining    = LOCK_THRESHOLD - (attempts % LOCK_THRESHOLD);
+
+      await supabase.from('login_attempts').upsert(
+        { phone, attempts, locked_until: lockedUntil, lock_duration_minutes: nextDuration },
+        { onConflict: 'phone' }
+      );
+
+      if (willLock) {
+        return res.status(429).json({
+          locked:                true,
+          seconds_remaining:     duration * 60,
+          lock_duration_minutes: duration,
+          message:               `Account locked for ${duration} minute${duration > 1 ? 's' : ''}.`,
+        });
+      }
+
+      return res.status(401).json({
+        locked:                false,
+        attempts_remaining:    remaining,
+        lock_duration_minutes: duration,
+        message:               'Incorrect phone number or password.',
+      });
     }
+
+    // ── 3. Success → clear lockout record ─────────────────────────────────────
+    await supabase.from('login_attempts').delete().eq('phone', phone);
 
     const { data: userData, error: userError } = await supabase
       .from('users')
@@ -193,14 +408,18 @@ export const loginUser = async (req, res) => {
       .eq('phone', phone)
       .single();
 
-    if (userError) return res.status(500).json({ error: userError });
+    if (userError) {
+      console.error('loginUser fetch user error:', userError);
+      return res.status(500).json({ message: 'Login succeeded but failed to load profile.' });
+    }
 
     return res.json({
-      message: 'Login successful.',
-      access_token: signInData.session.access_token,
+      message:       'Login successful.',
+      access_token:  signInData.session.access_token,
       refresh_token: signInData.session.refresh_token,
-      user: userData,
+      user:          userData,
     });
+
   } catch (err) {
     console.error('loginUser error:', err);
     return res.status(500).json({ message: 'Server error.' });
