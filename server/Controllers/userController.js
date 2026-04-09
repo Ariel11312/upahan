@@ -52,24 +52,24 @@ export const otpIpLimiter = rateLimit({
 });
 
 /** 10 verify attempts per IP per 10 min */
-// export const otpVerifyLimiter = rateLimit({
-//   windowMs: 10 * 60 * 1000,
-//   max: 10,
-//   keyGenerator: (req) => req.ip,
-//   standardHeaders: true,
-//   legacyHeaders: false,
-//   message: { message: 'Too many verification attempts. Please wait 10 minutes.' },
-// });
+export const otpVerifyLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 10,
+  keyGenerator: (req) => req.ip,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many verification attempts. Please wait 10 minutes.' },
+});
 
 // /** 5 signups per IP per hour */
-// export const signupLimiter = rateLimit({
-//   windowMs: 60 * 60 * 1000,
-//   max: 5,
-//   keyGenerator: (req) => req.ip,
-//   standardHeaders: true,
-//   legacyHeaders: false,
-//   message: { message: 'Too many sign-up attempts. Please try again in an hour.' },
-// });
+export const signupLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  keyGenerator: (req) => req.ip,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many sign-up attempts. Please try again in an hour.' },
+});
 
 /** 20 login attempts per IP per 15 min (stacks on top of per-phone lockout) */
 export const loginIpLimiter = rateLimit({
