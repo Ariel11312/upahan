@@ -170,7 +170,6 @@ export const sendOTP = async (req, res) => {
       }),
     });
     const smsData = await smsRes.json();
-console.log(otp)
     if (!smsRes.ok) {
       console.error('Semaphore error:', smsData);
       return res.status(500).json({ message: 'Failed to send SMS via Semaphore.' });
@@ -210,65 +209,6 @@ export const verifyOTP = async (req, res) => {
   // ✅ Verified — delete so it can't be reused
   otpStore.delete(phone);
 
-  const email = phoneToEmail(phone);
-  const password = `otp_${phone}_upahan_secure`;
-
-  try {
-    // Check if user already exists
-    const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
-    const existingUser = existingUsers?.users?.find(u => u.email === email);
-
-    let userId;
-
-    if (!existingUser) {
-      // First time — create the user
-      const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true,
-        user_metadata: { phone },
-      });
-
-      if (createError) {
-        console.error('Create user error:', createError);
-        return res.status(500).json({ message: 'Failed to create user.' });
-      }
-
-      userId = newUser.user.id;
-
-      // Save to users table
-      await supabaseAdmin.from('users').upsert({
-        id: userId,
-        phone,
-        email,
-        role: 'rentee',
-      });
-    } else {
-      userId = existingUser.id;
-    }
-
-    // Ensure password is always in sync before signing in
-    await supabaseAdmin.auth.admin.updateUserById(userId, { password });
-
-    // Sign in with regular client (not admin) to get session tokens
-    const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (signInErr) {
-      console.error('Sign in error:', signInErr);
-      return res.status(500).json({ message: 'Sign in failed after OTP verification.' });
-    }
-
-    return res.json({
-      message: 'OTP verified successfully.',
-      access_token: signInData.session.access_token,
-      refresh_token: signInData.session.refresh_token,
-    });
-
-  } catch (err) {
-    console.error('verifyOTP error:', err);
-    return res.status(500).json({ message: 'Server error during OTP verification.' });
-  }
+  // DO NOT create user here — just confirm OTP is valid
+  return res.json({ message: 'OTP verified.' });
 };

@@ -52,24 +52,24 @@ export const otpIpLimiter = rateLimit({
 });
 
 /** 10 verify attempts per IP per 10 min */
-export const otpVerifyLimiter = rateLimit({
-  windowMs: 10 * 60 * 1000,
-  max: 10,
-  keyGenerator: (req) => req.ip,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { message: 'Too many verification attempts. Please wait 10 minutes.' },
-});
+// export const otpVerifyLimiter = rateLimit({
+//   windowMs: 10 * 60 * 1000,
+//   max: 10,
+//   keyGenerator: (req) => req.ip,
+//   standardHeaders: true,
+//   legacyHeaders: false,
+//   message: { message: 'Too many verification attempts. Please wait 10 minutes.' },
+// });
 
-/** 5 signups per IP per hour */
-export const signupLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,
-  max: 5,
-  keyGenerator: (req) => req.ip,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { message: 'Too many sign-up attempts. Please try again in an hour.' },
-});
+// /** 5 signups per IP per hour */
+// export const signupLimiter = rateLimit({
+//   windowMs: 60 * 60 * 1000,
+//   max: 5,
+//   keyGenerator: (req) => req.ip,
+//   standardHeaders: true,
+//   legacyHeaders: false,
+//   message: { message: 'Too many sign-up attempts. Please try again in an hour.' },
+// });
 
 /** 20 login attempts per IP per 15 min (stacks on top of per-phone lockout) */
 export const loginIpLimiter = rateLimit({
@@ -126,16 +126,17 @@ export const sendOTP = async (req, res) => {
     }
 
     // ── Send via Semaphore ───────────────────────────────────────────────────
-    const smsRes = await fetch('https://api.semaphore.co/api/v4/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        apikey:     SEMAPHORE_API_KEY,
-        number:     phone,
-        message:    `Your Upahan verification code is: ${otp}. Valid for 5 minutes. Do not share this code.`,
-        sendername: SEMAPHORE_SENDER,
-      }),
-    });
+    const smsRes = await fetch('https://api.semaphore.co/api/v4/otp', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    apikey:     SEMAPHORE_API_KEY,
+    number:     phone,
+    message:    `Your Upahan verification code is: {otp}. Valid for 5 minutes. Do not share this code.`,
+    sendername: SEMAPHORE_SENDER,
+    code:       otp,   // Semaphore replaces {otp} in the message automatically
+  }),
+});
 
     if (!smsRes.ok) {
       const err = await smsRes.json();
@@ -238,91 +239,102 @@ export const verifyOTP = async (req, res) => {
 export const createUser = async (req, res) => {
   const { first_name, last_name, phone, password } = req.body;
 
+  console.log('[createUser] Called with:', { first_name, last_name, phone });
+
   if (!first_name || !last_name || !phone || !password) {
     return res.status(400).json({ message: 'All fields are required.' });
   }
 
-  const email       = phoneToEmail(phone);
+  const email = phoneToEmail(phone);
   const hashedPassword = await bcrypt.hash(password, 10);
 
   try {
-    // ── Check phone already registered ───────────────────────────────────────
+    // ── Check phone already registered in public.users ────────────────────
     const { data: existingUser } = await supabase
       .from('users')
       .select('id')
       .eq('phone', phone)
-      .maybeSingle(); // maybeSingle() won't error on 0 rows unlike single()
+      .maybeSingle();
+
+    console.log('[createUser] Existing user check:', existingUser);
 
     if (existingUser) {
       return res.status(409).json({ message: 'This phone number is already registered. Please login.' });
     }
 
-    // ── Check auth user by email (handles partial previous signups) ──────────
-    // FIX: listUsers({ perPage: 1000 }) is dangerous — it loads all users into
-    // memory. Use getUserByEmail (admin) or a direct DB lookup instead.
-    const { data: existingAuth } = await supabaseAdmin
-      .from('auth.users')
-      .select('id')
-      .eq('email', email)
-      .maybeSingle();
-
+    // ── Create or reuse auth user ─────────────────────────────────────────
     let authUserId;
 
-    if (existingAuth?.id) {
-      // Partial previous signup — reuse auth user and update password
-      authUserId = existingAuth.id;
-      await supabaseAdmin.auth.admin.updateUserById(authUserId, { password });
-    } else {
-      // Fresh signup
-      const { data: newAuthUser, error: authError } =
-        await supabaseAdmin.auth.admin.createUser({
-          email,
-          password,
-          email_confirm: true,
-          user_metadata: {
-            first_name,
-            last_name,
-            full_name: `${first_name} ${last_name}`,
-            phone,
-          },
-        });
+    const { data: newAuthUser, error: authError } =
+      await supabaseAdmin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { first_name, last_name, full_name: `${first_name} ${last_name}`, phone },
+      });
 
-      if (authError) {
-        console.error('Auth create error:', authError);
-        return res.status(500).json({ message: 'Failed to create account.' }); // don't leak authError.message
+    if (authError) {
+      if (authError.code === 'email_exists') {
+        // Auth user exists but public.users row never saved — find and reuse
+        console.log('[createUser] email_exists — finding existing auth user...');
+
+        const { data: listData, error: listError } =
+          await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+
+        if (listError) {
+          console.error('[createUser] listUsers error:', listError);
+          return res.status(500).json({ message: 'Server error.' });
+        }
+
+        const existing = listData.users.find(u => u.email === email);
+        if (!existing) {
+          return res.status(500).json({ message: 'Account conflict. Please contact support.' });
+        }
+
+        authUserId = existing.id;
+        console.log('[createUser] Reusing auth user:', authUserId);
+        await supabaseAdmin.auth.admin.updateUserById(authUserId, { password });
+
+      } else {
+        console.error('[createUser] Auth error:', authError);
+        return res.status(500).json({ message: `Auth error: ${authError.message}` });
       }
-
+    } else {
       authUserId = newAuthUser.user.id;
+      console.log('[createUser] New auth user created:', authUserId);
     }
 
-    // ── Insert into public.users ─────────────────────────────────────────────
-    // FIX: Do NOT store password in the users table — Supabase Auth owns auth.
-    // Storing a bcrypt hash in public.users alongside Supabase Auth is redundant
-    // and creates two sources of truth. Remove the password column if present.
-    const { data, error: insertError } = await supabase
+    // ── Insert into public.users using supabaseAdmin to bypass RLS ────────
+    console.log('[createUser] Inserting into public.users...');
+    const { data: newUser, error: insertError } = await supabaseAdmin
       .from('users')
       .upsert([{
-        id:         authUserId,
-        first_name,
-        last_name,
-        full_name:  `${first_name} ${last_name}`,
+        id:          authUserId,
+        first_name:  first_name.trim(),
+        last_name:   last_name.trim(),
+        full_name:   `${first_name.trim()} ${last_name.trim()}`,
         email,
         phone,
+        password:    hashedPassword,
         role:        'rentee',
         is_verified: true,
       }], { onConflict: 'id' })
       .select('id, first_name, last_name, phone, role, created_at')
       .single();
 
+    console.log('[createUser] Insert result:', { newUser, insertError });
+
     if (insertError) {
-      console.error('users insert error:', insertError);
-      return res.status(500).json({ message: 'Account created but profile save failed.' });
+      console.error('[createUser] Insert error:', insertError.message, insertError.code);
+      return res.status(500).json({ message: `Profile save failed: ${insertError.message}` });
     }
 
-    return res.status(201).json({ message: 'Account created successfully.', user: data });
+    console.log('[createUser] ✅ Success:', newUser.id);
+    return res.status(201).json({ message: 'Account created successfully.', user: newUser });
+
   } catch (err) {
-    console.error('createUser error:', err);
-    return res.status(500).json({ message: 'Server error.' });
+    console.error('[createUser] Unexpected error:', err.message);
+    return res.status(500).json({ message: `Unexpected error: ${err.message}` });
   }
 };
 
