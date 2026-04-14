@@ -14,7 +14,7 @@ import { createClient } from '@supabase/supabase-js';
 import userRoutes from './Routes/userRoutes.js';
 import authRoutes from './Routes/authRoutes.js';
 
-// Validate environment variables - using your actual variable names
+// Validate environment variables
 if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
   console.error('❌ Missing Supabase environment variables. Please check your .env file');
   console.error('SUPABASE_URL:', process.env.SUPABASE_URL ? '✓ Set' : '✗ Missing');
@@ -26,10 +26,10 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const server = http.createServer(app);
 
-// Supabase Setup - using SERVICE_ROLE_KEY instead of SERVICE_KEY
+// Supabase Setup
 const supabase = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY  // Changed this line
+  process.env.SUPABASE_SERVICE_KEY
 );
 
 // Socket.io Setup
@@ -71,12 +71,15 @@ app.get('/health', (_, res) => res.json({ status: 'ok' }));
 app.use('/api/users', userRoutes);
 app.use('/api/auth', authRoutes);
 
+// ─────────────────────────────────────────────────────────────────────────────
 // Socket Logic
+// ─────────────────────────────────────────────────────────────────────────────
 const onlineUsers = new Map();
 
 io.on('connection', (socket) => {
   console.log(`[connect] ${socket.id}`);
 
+  // ── Register ──────────────────────────────────────────────────────────────
   socket.on('register', (userId) => {
     if (!userId) return;
     socket.userId = userId;
@@ -86,24 +89,42 @@ io.on('connection', (socket) => {
     console.log(`[register] userId=${userId}`);
   });
 
-  socket.on('send_message', async ({ senderId, receiverId, content }) => {
+  // ── Send message ──────────────────────────────────────────────────────────
+  // FIX 1: added tempId so client can confirm its optimistic bubble
+  // FIX 2: added photo_urls so uploaded photos are persisted to the DB
+  socket.on('send_message', async ({ senderId, receiverId, content, tempId, photo_urls }) => {
     try {
       const { data, error } = await supabase
         .from('messages')
-        .insert({ sender_id: senderId, receiver_id: receiverId, content })
+        .insert({
+          sender_id:   senderId,
+          receiver_id: receiverId,
+          content:     content || 'EMPTY',
+          photo_urls:  Array.isArray(photo_urls) && photo_urls.length > 0
+                         ? photo_urls
+                         : null,
+        })
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('[send_message] DB insert error:', error.message);
+        socket.emit('message_error', { tempId, reason: error.message });
+        return;
+      }
 
-      io.to(receiverId).emit('receive_message', data);
-      io.to(senderId).emit('receive_message', data);
+      // Emit to receiver's room AND back to sender so the optimistic
+      // bubble gets replaced with the confirmed DB record
+      io.to(receiverId).emit('receive_message', { ...data, tempId });
+      io.to(senderId).emit('receive_message', { ...data, tempId });
+
     } catch (err) {
-      console.error('[send_message] error:', err.message);
-      socket.emit('message_error', err.message);
+      console.error('[send_message] exception:', err.message);
+      socket.emit('message_error', { tempId, reason: err.message });
     }
   });
 
+  // ── Mark read ─────────────────────────────────────────────────────────────
   socket.on('mark_read', async ({ senderId, receiverId }) => {
     try {
       await supabase
@@ -119,6 +140,7 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ── Typing indicators ─────────────────────────────────────────────────────
   socket.on('typing', ({ senderId, receiverId }) => {
     io.to(receiverId).emit('typing', { senderId });
   });
@@ -127,6 +149,7 @@ io.on('connection', (socket) => {
     io.to(receiverId).emit('stop_typing', { senderId });
   });
 
+  // ── Disconnect ────────────────────────────────────────────────────────────
   socket.on('disconnect', () => {
     if (socket.userId) {
       onlineUsers.delete(socket.userId);
@@ -134,9 +157,11 @@ io.on('connection', (socket) => {
       console.log(`[disconnect] userId=${socket.userId}`);
     }
   });
-});
+}); // ← end of io.on('connection')
 
+// ─────────────────────────────────────────────────────────────────────────────
 // Error Handlers
+// ─────────────────────────────────────────────────────────────────────────────
 app.use((req, res) => res.status(404).json({ message: 'Route not found.' }));
 
 app.use((err, req, res, next) => {
@@ -144,7 +169,9 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: 'An unexpected error occurred.' });
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
 // Start Server
+// ─────────────────────────────────────────────────────────────────────────────
 server.setTimeout(10000);
 server.listen(PORT, () => {
   console.log(`✅ Server running on port ${PORT}`);
