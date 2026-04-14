@@ -1,22 +1,42 @@
 import { createClient } from '@supabase/supabase-js';
 import supabase from '../Config/supabase.js';
 
-const SUPABASE_URL = 'https://ahebqfxpxiucsxlqwjtd.supabase.co';
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// Get environment variables with validation
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const SEMAPHORE_API_KEY = process.env.SEMAPHORE_API_KEY;
 const SEMAPHORE_SENDER = process.env.SEMAPHORE_SENDER_NAME || 'Upahan';
+
+// Validate required environment variables
+if (!SUPABASE_URL) {
+  console.error('❌ SUPABASE_URL is not defined in environment variables');
+  throw new Error('SUPABASE_URL is required');
+}
+
+if (!SUPABASE_SERVICE_KEY) {
+  console.error('❌ SUPABASE_SERVICE_KEY is not defined in environment variables');
+  throw new Error('SUPABASE_SERVICE_KEY is required for admin operations');
+}
+
+if (!SEMAPHORE_API_KEY) {
+  console.warn('⚠️ SEMAPHORE_API_KEY is not defined - SMS sending will fail');
+}
 
 // ✅ Admin client — only used server-side, never exposed to app
 const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
+console.log('✅ Supabase Admin client initialized');
+
 // ─── In-memory OTP store (replace with DB table in production) ────────────────
 // Structure: { '+639XXXXXXXXX': { otp: '123456', expiresAt: Date } }
 const otpStore = new Map();
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-const generateOTP = () => String(Math.floor(100000 + Math.random() * 900000));
+const generateOTP = () => {
+  return String(Math.floor(100000 + Math.random() * 900000));
+};
 
 const phoneToEmail = (phone) => {
   const digits = phone.replace('+63', '');
@@ -33,7 +53,7 @@ export const googleLogin = async (req, res) => {
 
   res.cookie('app_redirect_uri', appRedirectUri, {
     httpOnly: true,
-    secure: false, // set true in production
+    secure: process.env.NODE_ENV === 'production', // true in production
     sameSite: 'lax',
     maxAge: 5 * 60 * 1000,
   });
@@ -41,11 +61,15 @@ export const googleLogin = async (req, res) => {
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: 'http://192.168.100.37:3000/api/auth/callback',
+      redirectTo: `${process.env.ALLOWED_ORIGIN || 'http://localhost:3000'}/api/auth/callback`,
     },
   });
 
-  if (error) return res.status(500).json({ error });
+  if (error) {
+    console.error('Google OAuth error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+  
   res.redirect(data.url);
 };
 
@@ -107,42 +131,63 @@ export const authCallback = async (req, res) => {
 export const saveUser = async (req, res) => {
   const { access_token, refresh_token, redirectUrl } = req.body;
 
-  if (!access_token) return res.status(400).json({ error: 'Missing access_token' });
-  if (!redirectUrl) return res.status(400).json({ error: 'Missing redirectUrl' });
-
-  const { data: { user }, error } = await supabase.auth.getUser(access_token);
-  if (error) return res.status(500).json({ error });
-
-  const { data: existing } = await supabase
-    .from('users')
-    .select('id')
-    .eq('email', user.email)
-    .single();
-
-  if (!existing) {
-    const { error: insertError } = await supabase.from('users').insert([{
-      email: user.email,
-      full_name: user.user_metadata.full_name,
-      first_name: user.user_metadata.given_name,
-      last_name: user.user_metadata.family_name,
-      is_verified: true,
-      role: 'rentee',
-    }]);
-
-    if (insertError) return res.status(500).json({ error: insertError });
+  if (!access_token) {
+    return res.status(400).json({ error: 'Missing access_token' });
+  }
+  
+  if (!redirectUrl) {
+    return res.status(400).json({ error: 'Missing redirectUrl' });
   }
 
-  res.cookie('access_token', access_token, {
-    httpOnly: true,
-    secure: false,
-    sameSite: 'lax',
-    maxAge: 24 * 60 * 60 * 1000,
-  });
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser(access_token);
+    
+    if (error) {
+      console.error('Get user error:', error);
+      return res.status(500).json({ error: error.message });
+    }
 
-  res.json({
-    message: 'Logged in successfully!',
-    redirectUrl: `${redirectUrl}?access_token=${access_token}&refresh_token=${refresh_token}`,
-  });
+    // Check if user exists in your users table
+    const { data: existing, error: fetchError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', user.email)
+      .single();
+
+    if (!existing) {
+      // Create new user record
+      const { error: insertError } = await supabase.from('users').insert([{
+        id: user.id,
+        email: user.email,
+        full_name: user.user_metadata?.full_name || '',
+        first_name: user.user_metadata?.given_name || '',
+        last_name: user.user_metadata?.family_name || '',
+        is_verified: true,
+        role: 'rentee',
+      }]);
+
+      if (insertError) {
+        console.error('Insert user error:', insertError);
+        return res.status(500).json({ error: insertError.message });
+      }
+    }
+
+    res.cookie('access_token', access_token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60 * 1000,
+    });
+
+    res.json({
+      message: 'Logged in successfully!',
+      redirectUrl: `${redirectUrl}?access_token=${access_token}&refresh_token=${refresh_token}`,
+    });
+    
+  } catch (err) {
+    console.error('Save user error:', err);
+    return res.status(500).json({ error: err.message });
+  }
 };
 
 // ─── OTP: Send via Semaphore ──────────────────────────────────────────────────
@@ -158,6 +203,13 @@ export const sendOTP = async (req, res) => {
 
   otpStore.set(phone, { otp, expiresAt });
 
+  // Clean up old OTPs periodically (optional)
+  setTimeout(() => {
+    if (otpStore.get(phone)?.otp === otp) {
+      otpStore.delete(phone);
+    }
+  }, 5 * 60 * 1000);
+
   try {
     const smsRes = await fetch('https://api.semaphore.co/api/v4/messages', {
       method: 'POST',
@@ -169,10 +221,17 @@ export const sendOTP = async (req, res) => {
         sendername: SEMAPHORE_SENDER,
       }),
     });
+    
     const smsData = await smsRes.json();
+    
     if (!smsRes.ok) {
       console.error('Semaphore error:', smsData);
       return res.status(500).json({ message: 'Failed to send SMS via Semaphore.' });
+    }
+
+    // For development: log OTP if SMS fails or in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`📱 OTP for ${phone}: ${otp}`);
     }
 
     return res.json({ message: 'OTP sent successfully.' });
@@ -209,6 +268,114 @@ export const verifyOTP = async (req, res) => {
   // ✅ Verified — delete so it can't be reused
   otpStore.delete(phone);
 
-  // DO NOT create user here — just confirm OTP is valid
-  return res.json({ message: 'OTP verified.' });
+  // Check if user exists
+  const email = phoneToEmail(phone);
+  const { data: existingUser } = await supabase
+    .from('users')
+    .select('id, email, phone, first_name, last_name, role')
+    .eq('phone', phone)
+    .maybeSingle();
+
+  if (!existingUser) {
+    // User doesn't exist - they need to complete registration
+    return res.json({ 
+      verified: true,
+      requiresSignup: true,
+      message: 'OTP verified. Please complete registration.',
+      phone: phone
+    });
+  }
+
+  // User exists - they can login
+  return res.json({ 
+    verified: true,
+    requiresSignup: false,
+    message: 'OTP verified successfully.',
+    user: existingUser
+  });
+};
+
+// ─── Complete signup after OTP verification ──────────────────────────────────
+export const completeSignup = async (req, res) => {
+  const { phone, first_name, last_name, password } = req.body;
+
+  if (!phone || !first_name || !last_name || !password) {
+    return res.status(400).json({ message: 'All fields are required.' });
+  }
+
+  const email = phoneToEmail(phone);
+
+  try {
+    // Check if user already exists
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('phone', phone)
+      .maybeSingle();
+
+    if (existingUser) {
+      return res.status(409).json({ message: 'User already exists. Please login.' });
+    }
+
+    // Create auth user
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        first_name,
+        last_name,
+        full_name: `${first_name} ${last_name}`,
+        phone
+      }
+    });
+
+    if (authError) {
+      console.error('Auth creation error:', authError);
+      return res.status(500).json({ message: `Failed to create account: ${authError.message}` });
+    }
+
+    // Create user record
+    const { data: userData, error: insertError } = await supabaseAdmin
+      .from('users')
+      .insert([{
+        id: authData.user.id,
+        email,
+        phone,
+        first_name: first_name.trim(),
+        last_name: last_name.trim(),
+        full_name: `${first_name.trim()} ${last_name.trim()}`,
+        role: 'rentee',
+        is_verified: true
+      }])
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error('User insert error:', insertError);
+      return res.status(500).json({ message: `Failed to save user: ${insertError.message}` });
+    }
+
+    // Sign them in
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
+
+    if (signInError) {
+      console.error('Sign in error:', signInError);
+      return res.status(500).json({ message: 'Account created but login failed. Please try logging in.' });
+    }
+
+    return res.status(201).json({
+      message: 'Account created successfully',
+      access_token: signInData.session.access_token,
+      refresh_token: signInData.session.refresh_token,
+      user: userData
+    });
+
+  } catch (err) {
+    console.error('Complete signup error:', err);
+    return res.status(500).json({ message: `Server error: ${err.message}` });
+  }
 };
