@@ -92,7 +92,7 @@ io.on('connection', (socket) => {
   // ── Send message ──────────────────────────────────────────────────────────
   // FIX 1: added tempId so client can confirm its optimistic bubble
   // FIX 2: added photo_urls so uploaded photos are persisted to the DB
-  socket.on('send_message', async ({ senderId, receiverId, content, tempId, photo_urls }) => {
+  socket.on('send_message', async ({ senderId, receiverId, content, tempId, photo_urls, propertyId}) => {
     try {
       const { data, error } = await supabase
         .from('messages')
@@ -103,6 +103,7 @@ io.on('connection', (socket) => {
           photo_urls:  Array.isArray(photo_urls) && photo_urls.length > 0
                          ? photo_urls
                          : null,
+          property_id:propertyId
         })
         .select()
         .single();
