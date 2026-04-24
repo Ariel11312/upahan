@@ -399,7 +399,6 @@ export const loginUser = async (req, res) => {
   const email = phoneToEmail(phone);
 
   try {
-    // Check per-phone lockout
     const record = await getAttemptRecord(phone);
 
     if (record.locked_until && new Date(record.locked_until) > new Date()) {
@@ -411,7 +410,6 @@ export const loginUser = async (req, res) => {
       });
     }
 
-    // Attempt sign-in
     const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
 
     if (signInError) {
@@ -446,14 +444,14 @@ export const loginUser = async (req, res) => {
       });
     }
 
-    // Success → clear lockout record
-    await supabase.from('login_attempts').delete().eq('phone', phone);
-
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('id, first_name, last_name, full_name, phone, role, is_verified, created_at')
-      .eq('phone', phone)
-      .single();
+    // ✅ Run delete + user fetch in parallel instead of sequentially
+    const [, { data: userData, error: userError }] = await Promise.all([
+      supabase.from('login_attempts').delete().eq('phone', phone),
+      supabase.from('users')
+        .select('id, first_name, last_name, full_name, phone, role, is_verified, created_at')
+        .eq('phone', phone)
+        .single(),
+    ]);
 
     if (userError) {
       console.error('loginUser fetch user error:', userError);
