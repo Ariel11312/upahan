@@ -86,7 +86,6 @@ io.on('connection', (socket) => {
     socket.join(userId);
     onlineUsers.set(userId, socket.id);
     io.emit('online_users', Array.from(onlineUsers.keys()));
-    console.log(`[register] userId=${userId}`);
   });
 
   // ── Send message ──────────────────────────────────────────────────────────
