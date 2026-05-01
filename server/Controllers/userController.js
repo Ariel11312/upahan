@@ -152,17 +152,16 @@ export const sendOTP = async (req, res) => {
     }
 
     // Send via Semaphore in production
-    const smsRes = await fetch('https://api.semaphore.co/api/v4/otp', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        apikey: SEMAPHORE_API_KEY,
-        number: phone,
-        message: `Your Upahan verification code is: {otp}. Valid for 5 minutes. Do not share this code.`,
-        sendername: SEMAPHORE_SENDER,
-        code: otp,
-      }),
-    });
+   const smsRes = await fetch('https://api.semaphore.co/api/v4/priority', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    apikey: SEMAPHORE_API_KEY,
+    number: phone,
+    message: `Your Upahan verification code is: ${otp}. Valid for 5 minutes. Do not share this code.`,
+    sendername: 'Upahan',
+  }),
+});
 
     if (!smsRes.ok) {
       const err = await smsRes.json();
